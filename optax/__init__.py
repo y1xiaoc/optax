@@ -35,6 +35,7 @@ from optax._src.base import identity
 from optax._src.base import OptState
 from optax._src.base import Params
 from optax._src.base import Schedule
+from optax._src.base import set_to_zero
 from optax._src.base import TransformInitFn
 from optax._src.base import TransformUpdateFn
 from optax._src.base import Updates
@@ -55,7 +56,6 @@ from optax._src.constrain import ZeroNansState
 from optax._src.control_variates import control_delta_method
 from optax._src.control_variates import control_variates_jacobians
 from optax._src.control_variates import moving_avg_baseline
-from optax._src.factorized import FactoredParameterStats
 from optax._src.factorized import FactoredState
 from optax._src.factorized import scale_by_factored_rms
 from optax._src.linear_algebra import global_norm
@@ -134,6 +134,7 @@ from optax._src.update import apply_updates
 from optax._src.update import incremental_update
 from optax._src.update import periodic_update
 from optax._src.utils import multi_normal
+from optax._src.utils import scale_gradient
 from optax._src.wrappers import apply_if_finite
 from optax._src.wrappers import ApplyIfFiniteState
 from optax._src.wrappers import flatten
@@ -152,24 +153,24 @@ __all__ = (
     "adagrad",
     "adam",
     "adamw",
-    "AdaptiveGradClipState",
     "adaptive_grad_clip",
+    "AdaptiveGradClipState",
     "add_decayed_weights",
     "add_noise",
     "AddDecayedWeightsState",
     "additive_weight_decay",
     "AdditiveWeightDecayState",
     "AddNoiseState",
-    "apply_if_finite",
     "apply_every",
+    "apply_if_finite",
     "apply_updates",
     "ApplyEvery",
     "ApplyIfFiniteState",
     "centralize",
     "chain",
-    "clip",
     "clip_by_block_rms",
     "clip_by_global_norm",
+    "clip",
     "ClipByGlobalNormState",
     "ClipState",
     "constant_schedule",
@@ -179,15 +180,14 @@ __all__ = (
     "cosine_distance",
     "cosine_onecycle_schedule",
     "cosine_similarity",
-    "dpsgd",
     "differentially_private_aggregate",
     "DifferentiallyPrivateAggregateState",
+    "dpsgd",
     "ema",
     "EmaState",
     "EmptyState",
     "exponential_decay",
     "FactoredState",
-    "FactoredParameterStats",
     "fisher_diag",
     "flatten",
     "fromage",
@@ -201,24 +201,30 @@ __all__ = (
     "inject_hyperparams",
     "InjectHyperparamsState",
     "join_schedules",
+    "keep_params_nonnegative",
+    "l2_loss",
     "lamb",
     "lars",
+    "linear_onecycle_schedule",
+    "linear_schedule",
     "log_cosh",
     "lookahead",
     "LookaheadParams",
     "LookaheadState",
-    "l2_loss",
-    "linear_onecycle_schedule",
-    "linear_schedule",
-    "matrix_inverse_pth_root",
     "masked",
     "MaskedState",
-    "multi_transform",
-    "MultiTransformState",
+    "matrix_inverse_pth_root",
+    "maybe_update",
+    "MaybeUpdateState",
     "measure_valued_jacobians",
     "moving_avg_baseline",
     "multi_normal",
+    "multi_transform",
+    "MultiSteps",
+    "MultiStepsState",
+    "MultiTransformState",
     "noisy_sgd",
+    "NonNegativeParamsState",
     "OptState",
     "Params",
     "pathwise_jacobians",
@@ -229,9 +235,9 @@ __all__ = (
     "power_iteration",
     "radam",
     "rmsprop",
-    "scale",
     "scale_by_adam",
     "scale_by_belief",
+    "scale_by_factored_rms",
     "scale_by_param_block_norm",
     "scale_by_param_block_rms",
     "scale_by_radam",
@@ -242,6 +248,8 @@ __all__ = (
     "scale_by_stddev",
     "scale_by_trust_ratio",
     "scale_by_yogi",
+    "scale_gradient",
+    "scale",
     "ScaleByAdamState",
     "ScaleByFromageState",
     "ScaleByRmsState",
@@ -253,10 +261,11 @@ __all__ = (
     "ScaleState",
     "Schedule",
     "score_function_jacobians",
+    "set_to_zero",
     "sgd",
     "sgdr_schedule",
-    "sm3",
     "sigmoid_binary_cross_entropy",
+    "sm3",
     "smooth_labels",
     "softmax_cross_entropy",
     "trace",
@@ -267,6 +276,8 @@ __all__ = (
     "warmup_cosine_decay_schedule",
     "warmup_exponential_decay_schedule",
     "yogi",
+    "zero_nans",
+    "ZeroNansState",
 )
 
 #  _________________________________________

@@ -83,6 +83,7 @@ def adafactor(
     weight_decay_rate: Optional[float] = None,
     eps: float = 1e-30,
     factored: bool = True,
+    weight_decay_mask: MaskOrFn = None,
     ) -> base.GradientTransformation:
   """The Adafactor optimiser.
 
@@ -91,7 +92,7 @@ def adafactor(
   estimate of the second order moments used to scale gradients.
 
   References:
-    Zhuang et al, 2020: https://arxiv.org/abs/2010.07468
+    Shazeer and Stern, 2018: https://arxiv.org/abs/1804.04235
 
   Args:
       learning_rate: (float) a step size. Note: the natural scale for
@@ -111,6 +112,11 @@ def adafactor(
       weight_decay_rate: (float) optional rate at which to decay weights.
       eps: (float) regularization constant for root mean squared gradient.
       factored: (bool) whether to use factored second-moment estimates.
+      weight_decay_mask: a tree with same structure as (or a prefix of)
+        the params PyTree, or a Callable that returns such a pytree given
+        the params/updates. The leaves should be booleans, `True`
+        for leaves/subtrees you want to apply the transformation to,
+        and `False` for those you want to skip.
 
   Returns:
     the corresponding `GradientTransformation`.
@@ -134,7 +140,8 @@ def adafactor(
     tx.append(
         transform.ema(momentum, debias=False, accumulator_dtype=dtype_momentum))
   if weight_decay_rate is not None:
-    tx.append(transform.add_decayed_weights(weight_decay_rate))
+    tx.append(transform.add_decayed_weights(
+        weight_decay_rate, mask=weight_decay_mask))
   # In gradient "descent" we follow the negative gradient.
   tx.append(transform.scale(-1))
   return combine.chain(*tx)
@@ -178,7 +185,8 @@ def adam(
     b1: float = 0.9,
     b2: float = 0.999,
     eps: float = 1e-8,
-    eps_root: float = 0.0
+    eps_root: float = 0.0,
+    mu_dtype: Optional[Any] = None,
 ) -> base.GradientTransformation:
   """The classic Adam optimiser.
 
@@ -198,12 +206,15 @@ def adam(
     eps_root: (default `0`), a small constant applied to denominator inside the
       square root (as in RMSProp), to avoid dividing by zero when rescaling.
       This is needed for example when computing (meta-)gradients through Adam.
+    mu_dtype: optional `dtype` to be used for the first order accumulator; if
+      `None` then the `dtype is inferred from `params` and `updates`.
 
   Returns:
     the corresponding `GradientTransformation`.
   """
   return combine.chain(
-      transform.scale_by_adam(b1=b1, b2=b2, eps=eps, eps_root=eps_root),
+      transform.scale_by_adam(
+          b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
       _scale_by_learning_rate(learning_rate),
   )
 
@@ -214,6 +225,7 @@ def adamw(
     b2: float = 0.999,
     eps: float = 1e-8,
     eps_root: float = 0.0,
+    mu_dtype: Optional[Any] = None,
     weight_decay: float = 1e-4,
     mask: Optional[Union[Any, Callable[[base.Params], Any]]] = None,
 ) -> base.GradientTransformation:
@@ -240,6 +252,8 @@ def adamw(
     eps_root: (default `0`), a small constant applied to denominator inside the
       square root (as in RMSProp), to avoid dividing by zero when rescaling.
       This is needed for instance when computing (meta-)gradients through Adam.
+    mu_dtype: optional `dtype` to be used for the first order accumulator; if
+      `None` then the `dtype is inferred from `params` and `updates`.
     weight_decay: strength of the weight decay regularization.
     mask: a tree with same structure as (or a prefix of) the params PyTree,
       or a Callable that returns such a pytree given the params/updates.
@@ -250,7 +264,8 @@ def adamw(
     the corresponding `GradientTransformation`.
   """
   return combine.chain(
-      transform.scale_by_adam(b1=b1, b2=b2, eps=eps, eps_root=eps_root),
+      transform.scale_by_adam(
+          b1=b1, b2=b2, eps=eps, eps_root=eps_root, mu_dtype=mu_dtype),
       transform.add_decayed_weights(weight_decay, mask),
       _scale_by_learning_rate(learning_rate),
   )
@@ -343,7 +358,7 @@ def lamb(
     eps: float = 1e-6,
     eps_root: float = 0.0,
     weight_decay: float = 0.,
-    mask: Optional[Union[Any, Callable[[base.Params], Any]]] = None,
+    mask: MaskOrFn = None,
 ) -> base.GradientTransformation:
   """The LAMB optimiser.
 
@@ -460,6 +475,7 @@ def rmsprop(
     momentum: Optional[float] = None,
     nesterov: bool = False
 ) -> base.GradientTransformation:
+  # pylint: disable=line-too-long
   """A flexible RMSProp optimiser.
 
   RMSProp is an SGD variant with learning rate adaptation. The `learning_rate`
@@ -469,8 +485,7 @@ def rmsprop(
   optimiser that can be used to switch between several of these variants.
 
   References:
-    Tieleman and Hinton, 2012:
-        www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf
+    Tieleman and Hinton, 2012: http://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf
     Graves, 2013: https://arxiv.org/abs/1308.0850
 
   Args:
@@ -489,6 +504,7 @@ def rmsprop(
   Returns:
     the corresponding `GradientTransformation`.
   """
+  # pylint: enable=line-too-long
   if centered:
     return combine.chain(
         transform.scale_by_stddev(
@@ -509,7 +525,8 @@ def rmsprop(
 def sgd(
     learning_rate: ScalarOrSchedule,
     momentum: Optional[float] = None,
-    nesterov: bool = False
+    nesterov: bool = False,
+    accumulator_dtype: Optional[Any] = None,
 ) -> base.GradientTransformation:
   """A canonical Stochastic Gradient Descent optimiser.
 
@@ -525,12 +542,15 @@ def sgd(
     momentum: (default `None`), the `decay` rate used by the momentum term,
       when it is set to `None`, then momentum is not used at all.
     nesterov (default `False`): whether nesterov momentum is used.
+    accumulator_dtype: optional `dtype` to be used for the accumulator; if
+      `None` then the `dtype` is inferred from `params` and `updates`.
 
   Returns:
     A `GradientTransformation`.
   """
   return combine.chain(
-      (transform.trace(decay=momentum, nesterov=nesterov)
+      (transform.trace(decay=momentum, nesterov=nesterov,
+                       accumulator_dtype=accumulator_dtype)
        if momentum is not None else base.identity()),
       _scale_by_learning_rate(learning_rate)
   )
@@ -572,7 +592,7 @@ def yogi(
     learning_rate: ScalarOrSchedule,
     b1: float = 0.9,
     b2: float = 0.999,
-    eps: float = 1e-3
+    eps: float = 1e-3,
 ) -> base.GradientTransformation:
   """The Yogi optimiser.
 
