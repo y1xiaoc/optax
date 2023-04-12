@@ -524,7 +524,7 @@ def inject_hyperparams(
     inner_factory: Callable[..., base.GradientTransformation],
     static_args: Union[str, Iterable[str]] = (),
     hyperparam_dtype: Optional[jnp.dtype] = None,
-) -> Callable[..., base.GradientTransformation]:
+) -> Callable[..., base.GradientTransformationExtraArgs]:
   """Wrapper that injects hyperparameters into the inner GradientTransformation.
 
   This wrapper allows you to pass schedules (i.e. a function that returns a
@@ -576,7 +576,7 @@ def inject_hyperparams(
         f'{set(inner_signature.parameters.keys())}')
 
   @functools.wraps(inner_factory)
-  def wrapped_transform(*args, **kwargs) -> base.GradientTransformation:
+  def wrapped_transform(*args, **kwargs) -> base.GradientTransformationExtraArgs:
     bound_arguments = inner_signature.bind(*args, **kwargs)
     bound_arguments.apply_defaults()
 
@@ -608,7 +608,7 @@ def inject_hyperparams(
       return InjectHyperparamsState(  # pylint:disable=too-many-function-args
           count, hparams, inner_factory(**other_hps, **hparams).init(params))
 
-    def update_fn(updates, state, params=None):
+    def update_fn(updates, state, params=None, **extra_args):
       if hyperparam_dtype is None:
         dtype = getattr(next(iter(
             jax.tree_util.tree_leaves(updates)), None), 'dtype', None)
@@ -617,14 +617,15 @@ def inject_hyperparams(
       hparams = {k: _convert_floats(v, dtype)
                  for k, v in state.hyperparams.items()}
       hparams.update(schedule_fn(state.count, dtype))
-      updates, inner_state = inner_factory(**other_hps, **hparams).update(
-          updates, state.inner_state, params)
+      updates, inner_state = base.with_extra_args_support(
+          inner_factory(**other_hps, **hparams)).update(
+          updates, state.inner_state, params, **extra_args)
       count_inc = numerics.safe_int32_increment(state.count)
 
       # pylint:disable=too-many-function-args
       return updates, InjectHyperparamsState(count_inc, hparams, inner_state)
       # pylint:enable=too-many-function-args
 
-    return base.GradientTransformation(init_fn, update_fn)
+    return base.GradientTransformationExtraArgs(init_fn, update_fn)
 
   return wrapped_transform
