@@ -576,7 +576,8 @@ def inject_hyperparams(
         f'{set(inner_signature.parameters.keys())}')
 
   @functools.wraps(inner_factory)
-  def wrapped_transform(*args, **kwargs) -> base.GradientTransformationExtraArgs:
+  def wrapped_transform(*args, **kwargs
+                        ) -> base.GradientTransformationExtraArgs:
     bound_arguments = inner_signature.bind(*args, **kwargs)
     bound_arguments.apply_defaults()
 
